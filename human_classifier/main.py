@@ -25,11 +25,11 @@ not_human.append('background')
 # Human
 human = []
 human.append('full_body')
-# human.append('full_body_without_head')
+human.append('full_body_without_head')
 # human.append('head')
 # human.append('lower_body')
 # human.append('lower_body_under_shoulder')
-# human.append('upper_body')
+human.append('upper_body')
 # human.append('upper_body_above_knee')
 
 category_bundle = []
@@ -39,8 +39,14 @@ category_bundle.append(human)
 
 def make_buffer(path):
     max_num_of_category = {}
-    max_num_of_category['background'] = 1000
+    max_num_of_category['background'] = 3000
     max_num_of_category['full_body'] = 1000
+    max_num_of_category['full_body_without_head'] = 1000
+    max_num_of_category['head'] = 1000
+    max_num_of_category['lower_body'] = 1000
+    max_num_of_category['lower_body_under_shoulder'] = 1000
+    max_num_of_category['upper_body'] = 1000
+    max_num_of_category['upper_body_above_knee'] = 1000
 
     images_count = {}
     buffer = InriaBuffer(len(category_bundle), [128, 128])
@@ -67,7 +73,18 @@ if __name__ == '__main__':
     sess = tf.Session(config=config)
 
     lenet = build_network.LeNet(sess)
+
+    restore = False
+
     lenet.set_train_buffer(train_buffer)
-    lenet.train()
+    lenet.build()
 
+    if not restore:
+        lenet.train()
+    else:
+        lenet.restore()
 
+    test_buffer = make_buffer('/home/yildbs/Data/INRIA/imadeit/test/')
+    test_buffer.shuffle()
+    lenet.set_test_buffer(test_buffer)
+    lenet.test(True)

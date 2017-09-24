@@ -9,7 +9,7 @@ class BatchImageBuffer:
         self._paths = []
         self._images = []
         self._labels = []
-        self._categories = []
+        self._category_bundle = []
 
         if target_size == 0:
             target_size = [128, 128] # Default image size is 128x128
@@ -23,11 +23,11 @@ class BatchImageBuffer:
         one_hot_array[label] = 1
         return one_hot_array
 
-    def get_categories(self):
-        return self._categories
+    def get_category_bundle(self):
+        return self._category_bundle
 
     def add_categories(self, categories):
-        self._categories.extend(categories)
+        self._category_bundle.append(categories)
 
     def add_reshaped_image_to_buffer(self, path, image, label):
         if image.shape != self._target_shape:
@@ -65,6 +65,7 @@ class BatchImageBuffer:
     def next_batch(self, batch_size):
         start_index = self._current_index
         end_index = self._current_index+batch_size
+        self._current_index = end_index
         if end_index > self.size():
             end_index = self.size()
             self.reset()
