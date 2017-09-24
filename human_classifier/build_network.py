@@ -2,6 +2,10 @@ import tensorflow as tf
 import math
 
 
+class Evaluator:
+    []
+
+
 class LeNet:
     def __init__(self, sess):
         self.sess = sess
@@ -16,7 +20,7 @@ class LeNet:
         # Train
         self.stages = [0.0, 0.5, 0.9, 0.99]
         self.batch_sizes = [200, 100, 50, 25]
-        self.learning_rates = [0.01, 0.001, 0.0001, 0.00003]
+        self.learning_rates = [0.001, 0.0001, 0.0001, 0.00003]
 
     def set_train_buffer(self, buffer):
         self._train_buffer = buffer
@@ -39,12 +43,14 @@ class LeNet:
         shape = self.shape
         num_label = self.num_label
 
+        batch_size, learning_rate = self._get_batch_size_learning_rage(0)
+
         input = tf.placeholder(tf.float32, [None, shape[0]*shape[1]*shape[2]])
         ground_truth = tf.placeholder(tf.float32, [None, num_label])
         logits = self._build_network(input, shape, num_label)
 
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=ground_truth, logits=logits))
-        train_step = tf.train.AdamOptimizer(1e-4).minimize(cost)
+        train_step = tf.train.AdamOptimizer(learning_rate).minimize(cost)
         correct_prediction = tf.equal(tf.argmax(ground_truth, 1), tf.argmax(logits, 1))
         accuracy_step = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
@@ -52,21 +58,29 @@ class LeNet:
 
         self.sess.run(tf.global_variables_initializer())
 
-        accuracy = 0
         for epoch in range(99999):
-            batch_size, learning_rate = self._get_batch_size_learning_rage(accuracy)
             batch_count = int(math.ceil(self._train_buffer.size() / batch_size))
+
             for idx in range(batch_count):
                 batch_x, batch_y, _ = self._train_buffer.next_batch(batch_size)
                 self.sess.run(train_step, feed_dict={input:batch_x, ground_truth:batch_y})
 
-            batch_x = self._train_buffer.images()
-            batch_y = self._train_buffer.labels()
-            accuracy = self.sess.run(accuracy_step, feed_dict={input:batch_x, ground_truth:batch_y})
+            accuracy_sum = 0
+            for idx in range(batch_count):
+                batch_x, batch_y, paths = self._train_buffer.next_batch(batch_size)
+                # accuracy = self.sess.run(accuracy_step, feed_dict={input: batch_x, ground_truth: batch_y})
+                # accuracy_sum += accuracy * len(batch_x)
+                prediction = self.sess.run(correct_prediction, feed_dict={input: batch_x, ground_truth: batch_y})
 
-            print('Epoch %02d' % epoch, ' - Train accuracy : %g' % accuracy)
+
+
+            accuracy = accuracy_sum / self._train_buffer.size()
+
+            print('Epoch %02d' % epoch, ' - Train accuracy : %.03f' % accuracy)
             print('- Graph saved at %s' % saver.save(self.sess, "./model.ckpt"))
-
+            batch_size, learning_rate = self._get_batch_size_learning_rage(accuracy)
+            print('- Next batch size : ', batch_size)
+            print('- Next learning rate : ', learning_rate)
 
     def _build_network(self, input, shape, num_label):
         input_image = tf.reshape(input, [-1, shape[0], shape[1], shape[2]])

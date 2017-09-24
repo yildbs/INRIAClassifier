@@ -6,7 +6,11 @@ import random
 
 class BatchImageBuffer:
     def __init__(self, num_labels, target_size=0):
-        self._buffer = [] # list of [filename, image, label]
+        self._paths = []
+        self._images = []
+        self._labels = []
+        self._categories = []
+
         if target_size == 0:
             target_size = [128, 128] # Default image size is 128x128
         self._target_size = target_size
@@ -19,14 +23,21 @@ class BatchImageBuffer:
         one_hot_array[label] = 1
         return one_hot_array
 
+    def get_categories(self):
+        return self._categories
+
+    def add_categories(self, categories):
+        self._categories.extend(categories)
+
     def add_reshaped_image_to_buffer(self, path, image, label):
         if image.shape != self._target_shape:
             raise Exception('Shape of image is not same as buffer\'s shape')
-
-        # TODO. Check
         image = np.reshape(image, image.size)
         label = self._label_to_one_hot_encoding(label)
-        self._buffer.append([image, label, path])
+
+        self._paths.append(path)
+        self._images.append(image)
+        self._labels.append(label)
 
     def shape(self):
         return self._target_shape
@@ -35,24 +46,27 @@ class BatchImageBuffer:
         return self._num_labels
 
     def shuffle(self):
-        random.shuffle(self._buffer)
+        buffer = list(zip(self._images, self._labels, self._paths))
+        random.shuffle(buffer)
+        self._images, self._labels, self._paths = zip(*buffer)
 
     def reset(self):
         self._current_index = 0
 
-    def images(self):
-        return self._buffer[:][1]
+    def get_images(self):
+        return self._images
 
-    def labels(self):
-        return self._buffer[:][2]
+    def get_labels(self):
+        return self._labels
 
     def size(self):
-        return len(self._buffer)
+        return len(self._images)
 
     def next_batch(self, batch_size):
         start_index = self._current_index
         end_index = self._current_index+batch_size
-        if end_index >= len(self._buffer):
-            end_index = len(self._buffer)
+        if end_index > self.size():
+            end_index = self.size()
             self.reset()
-        return self._buffer[start_index:end_index]
+        return self._images[start_index:end_index], self._labels[start_index:end_index], self._paths[
+                                                                                            start_index:end_index]

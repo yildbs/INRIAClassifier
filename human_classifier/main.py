@@ -39,12 +39,13 @@ category_bundle.append(human)
 
 def make_buffer(path):
     max_num_of_category = {}
-    max_num_of_category['background'] = 100
-    max_num_of_category['full_body'] = 100
+    max_num_of_category['background'] = 1000
+    max_num_of_category['full_body'] = 1000
 
     images_count = {}
     buffer = InriaBuffer(len(category_bundle), [128, 128])
     for label, categories in zip(range(9999), category_bundle):
+        buffer.add_categories(categories)
         for category in categories:
             filelist = glob.glob(path+'/'+category+'/*.*')
             random.shuffle(filelist)
@@ -59,6 +60,7 @@ if __name__ == '__main__':
     random.seed(0)
     print('Human classifier with inria dataset')
     train_buffer = make_buffer('/home/yildbs/Data/INRIA/imadeit/train/')
+    train_buffer.shuffle()
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
