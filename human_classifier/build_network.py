@@ -36,7 +36,7 @@ class Evaluator:
                 all_correct += correct
                 score = correct / total
                 scores.append(score)
-                print(' - %02d. ' % label, category.rjust(20), ' : %.03f' % score, '= %05d' % correct, '/ %05d' % total)
+                print(' - %02d. ' % label, category.rjust(30), ' : %.03f' % score, '= %05d' % correct, '/ %05d' % total)
         print('--------------------------')
         all_score = all_correct / all_total
         print('Total Score : %.03f'%all_score, '= %05d' % all_correct, '/ %05d' % all_total)
@@ -52,7 +52,8 @@ class LeNet:
         self.conv1_dim = 32
         self.conv2_filter_size = 5
         self.conv2_dim = 32
-        self.fc1_dim = 500
+        self.fc1_dim = 1000
+        self.fc2_dim = 500
 
     def set_train_buffer(self, buffer):
         self._train_buffer = buffer
@@ -88,6 +89,7 @@ class LeNet:
                     print('* ', str(correct).rjust(5), ' - Prediction vs Answer :', prediction, answer)
                     cv2.imshow('image', image)
                     if cv2.waitKey(0)==ord('c'):
+                        print('Skip imshow!')
                         imshow = False
         all_score, scores = evaluator.print_scores()
         print('Test Total Accuracy : ', all_score)
@@ -116,12 +118,11 @@ class LeNet:
         global_step = tf.Variable(0, trainable=False)
         starter_learning_rate = 0.0001
         end_learning_rate = 0.000001
-        decay_steps = 3
+        decay_steps = 20
         learning_rate = tf.train.polynomial_decay(starter_learning_rate, global_step,
                                                   decay_steps, end_learning_rate,
                                                   power=0.5)
-
-        train_step = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+        train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
         correct_prediction = tf.equal(tf.argmax(ground_truth, 1), tf.argmax(logits, 1))
         # accuracy_step = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
@@ -157,13 +158,13 @@ class LeNet:
     def _build_network(self, input, shape, num_label):
         input_image = tf.reshape(input, [-1, shape[0], shape[1], shape[2]])
 
-        initializer = tf.contrib.layers.xavier_initializer
+        initializer = tf.contrib.layers.xavier_initializer()
 
         # Convolution layer 1
         filter_size = self.conv1_filter_size
         conv1_w = tf.get_variable('conv1_W', shape=[filter_size, filter_size, shape[2], self.conv1_dim],
-                                  initializer=tf.contrib.layers.xavier_initializer())
-        conv1_b = tf.get_variable('conv1_b', shape=[self.conv1_dim], initializer=tf.contrib.layers.xavier_initializer())
+                                  initializer=initializer)
+        conv1_b = tf.get_variable('conv1_b', shape=[self.conv1_dim], initializer=initializer)
         conv1_conv = tf.nn.conv2d(input_image, conv1_w, strides=[1, 1, 1, 1], padding='VALID')+conv1_b
         conv1_activation = tf.nn.relu(conv1_conv)
 
@@ -173,8 +174,8 @@ class LeNet:
         # Convolution layer 2
         filter_size = self.conv2_filter_size
         conv2_w = tf.get_variable('conv2_W', shape=[filter_size, filter_size, self.conv1_dim, self.conv2_dim],
-                                  initializer=tf.contrib.layers.xavier_initializer())
-        conv2_b = tf.get_variable('conv2_b', shape=[self.conv2_dim], initializer=tf.contrib.layers.xavier_initializer())
+                                  initializer=initializer)
+        conv2_b = tf.get_variable('conv2_b', shape=[self.conv2_dim], initializer=initializer)
         conv2_conv = tf.nn.conv2d(pool1_max_pool, conv2_w, strides=[1, 1, 1, 1], padding='VALID') + conv2_b
         conv2_activation = tf.nn.relu(conv2_conv)
 
@@ -186,15 +187,22 @@ class LeNet:
         # Fully connected layer 1
         fc1_w = tf.get_variable('fc1_w', shape=[pool2_max_pool_dim, self.fc1_dim],
                                 initializer=tf.contrib.layers.xavier_initializer())
-        fc1_b = tf.get_variable('fc1_b', shape=[self.fc1_dim], initializer=tf.contrib.layers.xavier_initializer())
+        fc1_b = tf.get_variable('fc1_b', shape=[self.fc1_dim], initializer=initializer)
         fc1_fc = tf.matmul(flat_pool2_max_pool, fc1_w) + fc1_b
         fc1_fc_dim = int(fc1_fc.shape[1])
 
         # Fully connected layer 2
-        fc2_w = tf.get_variable('fc2_w', shape=[self.fc1_dim, num_label],
+        fc2_w = tf.get_variable('fc2_w', shape=[self.fc1_dim, self.fc2_dim],
                                 initializer=tf.contrib.layers.xavier_initializer())
-        fc2_b = tf.get_variable('fc2_b', shape=[num_label], initializer=tf.contrib.layers.xavier_initializer())
+        fc2_b = tf.get_variable('fc2_b', shape=[self.fc2_dim], initializer=initializer)
         fc2_fc = tf.matmul(fc1_fc, fc2_w) + fc2_b
+        fc2_fc_dim = int(fc2_fc.shape[1])
 
-        return fc2_fc
+        # Fully connected layer 3
+        fc3_w = tf.get_variable('fc3_w', shape=[self.fc2_dim, num_label],
+                                initializer=tf.contrib.layers.xavier_initializer())
+        fc3_b = tf.get_variable('fc3_b', shape=[num_label], initializer=initializer)
+        fc3_fc = tf.matmul(fc2_fc, fc3_w) + fc3_b
+
+        return fc3_fc
 

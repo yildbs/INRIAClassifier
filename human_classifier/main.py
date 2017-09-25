@@ -37,35 +37,45 @@ category_bundle.append(not_human)
 category_bundle.append(human)
 
 
-def make_buffer(path):
+def make_buffer(path, refine=False):
     max_num_of_category = {}
-    max_num_of_category['background'] = 3000
-    max_num_of_category['full_body'] = 1000
-    max_num_of_category['full_body_without_head'] = 1000
-    max_num_of_category['head'] = 1000
-    max_num_of_category['lower_body'] = 1000
-    max_num_of_category['lower_body_under_shoulder'] = 1000
-    max_num_of_category['upper_body'] = 1000
-    max_num_of_category['upper_body_above_knee'] = 1000
+    max_num_of_category['background'] = 5400*3
+    # max_num_of_category['background'] = 3000
+    # max_num_of_category['full_body'] = 1000
+    # max_num_of_category['full_body_without_head'] = 1000
+    # max_num_of_category['head'] = 1000
+    # max_num_of_category['lower_body'] = 1000
+    # max_num_of_category['lower_body_under_shoulder'] = 1000
+    # max_num_of_category['upper_body'] = 1000
+    # max_num_of_category['upper_body_above_knee'] = 1000
 
     images_count = {}
     buffer = InriaBuffer(len(category_bundle), [128, 128])
     for label, categories in zip(range(9999), category_bundle):
         buffer.add_categories(categories)
         for category in categories:
+            images_count[category] = 0
             filelist = glob.glob(path+'/'+category+'/*.*')
             random.shuffle(filelist)
-            if category in max_num_of_category:
+            if category in max_num_of_category and refine:
                 filelist = filelist[:max_num_of_category[category]]
             for file in filelist:
                 buffer.add_path_label(file, label)
+                images_count[category] += 1
+
+    print('Num of images in each classes')
+    for label, categories in zip(range(9999), category_bundle):
+        buffer.add_categories(categories)
+        for category in categories:
+            print('%02d. '% label, str(category).rjust(30), ' - ', images_count[category])
+
     return buffer
 
 
 if __name__ == '__main__':
     random.seed(0)
     print('Human classifier with inria dataset')
-    train_buffer = make_buffer('/home/yildbs/Data/INRIA/imadeit/train/')
+    train_buffer = make_buffer('/home/yildbs/Data/INRIA/imadeit/train/', True)
     train_buffer.shuffle()
 
     config = tf.ConfigProto()
@@ -87,4 +97,4 @@ if __name__ == '__main__':
     test_buffer = make_buffer('/home/yildbs/Data/INRIA/imadeit/test/')
     test_buffer.shuffle()
     lenet.set_test_buffer(test_buffer)
-    lenet.test(True)
+    lenet.test()
