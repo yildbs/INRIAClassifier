@@ -119,7 +119,7 @@ class LeNet:
 
         global_step = tf.Variable(0, trainable=False)
         starter_learning_rate = self.learning_rates[0]
-        end_learning_rate = self.learning_rates[0]
+        end_learning_rate = self.learning_rates[1]
         decay_steps = self.decay_steps
         learning_rate = tf.train.polynomial_decay(starter_learning_rate, global_step,
                                                   decay_steps, end_learning_rate,
