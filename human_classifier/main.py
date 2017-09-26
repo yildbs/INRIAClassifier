@@ -7,15 +7,34 @@ from human_classifier import build_network
 
 
 class InriaBuffer(batchimagebuffer.BatchImageBuffer):
-    def add_path_label(self, path, label):
+    def __init__(self, num_labels, target_size=0):
+        batchimagebuffer.BatchImageBuffer.__init__(self, num_labels, target_size)
+        self.process = {}
+        self.process['original'] = self.get_original_image
+        self.process['flipped'] = self.get_flipped_image
+
+    def add_path_label(self, path, label, processings=None):
         image = cv2.imread(path)
         image = cv2.resize(image, tuple(self._target_size))
-        image = image / 255.
-        self.add_reshaped_image_to_buffer(path, image, label)
+        images = []
+        if processings == None:
+            processings = ['original']
+        for processing in processings:
+            images.append(self.process[processing](image))
+
+        for img in images:
+            img = img / 255.
+            self.add_reshaped_image_to_buffer(path, img, label)
 
     def add_paths_labels(self, paths, labels):
         for path, label in zip(paths, labels):
             self.add_path_label(path, label)
+
+    def get_original_image(self, image):
+        return image
+
+    def get_flipped_image(self, image):
+        return cv2.flip(image, 1)
 
 # # Background list
 # not_human = []
@@ -100,26 +119,6 @@ class InriaBuffer(batchimagebuffer.BatchImageBuffer):
 # human.append('lower_body_under_shoulder_wide')
 # human.append('lower_body_wide')
 
-def make_buffer(path, category_bundle, buffer, max_num_of_category, refine):
-    images_count = {}
-    for label, categories in zip(range(9999), category_bundle):
-        buffer.add_categories(categories)
-        for category in categories:
-            images_count[category] = 0
-            filelist = glob.glob(path + '/' + category + '/*.*')
-            random.shuffle(filelist)
-            if (category in max_num_of_category and refine) or category == 'background':
-                filelist = filelist[:max_num_of_category[category]]
-            for file in filelist:
-                buffer.add_path_label(file, label)
-                images_count[category] += 1
-
-    print('Num of images in each classes')
-    for label, categories in zip(range(9999), category_bundle):
-        for category in categories:
-            print('%02d. ' % label, str(category).rjust(30), ' - ', images_count[category])
-    return buffer
-
 
 def make_train_buffer(path, refine=False):
     # Background list
@@ -133,9 +132,9 @@ def make_train_buffer(path, refine=False):
     # human.append('full_body_left')
     # human.append('full_body_left_bot')
     # human.append('full_body_left_top')
-    # human.append('full_body_right')
-    # human.append('full_body_right_bot')
-    # human.append('full_body_right_top')
+    human.append('full_body_right')
+    human.append('full_body_right_bot')
+    human.append('full_body_right_top')
     human.append('full_body_top')
     human.append('full_body_wide')
 
@@ -146,7 +145,26 @@ def make_train_buffer(path, refine=False):
     category_bundle.append(not_human)
     category_bundle.append(human)
     buffer = InriaBuffer(len(category_bundle), [96, 96])
-    buffer = make_buffer(path, category_bundle, buffer, max_num_of_category, refine)
+
+    images_count = {}
+    for label, categories in zip(range(9999), category_bundle):
+        buffer.add_categories(categories)
+        for category in categories:
+            images_count[category] = 0
+            filelist = glob.glob(path + '/' + category + '/*.*')
+            random.shuffle(filelist)
+            if (category in max_num_of_category and refine) or category == 'background':
+                filelist = filelist[:max_num_of_category[category]]
+            for file in filelist:
+                buffer.add_path_label(file, label)
+                if file.find('right') != -1:
+                    buffer.add_path_label(file, label, ['flipped'])
+                images_count[category] += 1
+
+    print('Num of images in each classes')
+    for label, categories in zip(range(9999), category_bundle):
+        for category in categories:
+            print('%02d. ' % label, str(category).rjust(30), ' - ', images_count[category])
     return buffer
 
 
@@ -169,13 +187,29 @@ def make_test_buffer(path, refine=False):
     human.append('full_body_wide')
 
     max_num_of_category = {}
-    max_num_of_category['background'] = 170 * len(human)
+    max_num_of_category['background'] = 180 * len(human)
 
     category_bundle = []
     category_bundle.append(not_human)
     category_bundle.append(human)
     buffer = InriaBuffer(len(category_bundle), [96, 96])
-    buffer = make_buffer(path, category_bundle, buffer, max_num_of_category, refine)
+    images_count = {}
+    for label, categories in zip(range(9999), category_bundle):
+        buffer.add_categories(categories)
+        for category in categories:
+            images_count[category] = 0
+            filelist = glob.glob(path + '/' + category + '/*.*')
+            random.shuffle(filelist)
+            if (category in max_num_of_category and refine) or category == 'background':
+                filelist = filelist[:max_num_of_category[category]]
+            for file in filelist:
+                buffer.add_path_label(file, label)
+                images_count[category] += 1
+
+    print('Num of images in each classes')
+    for label, categories in zip(range(9999), category_bundle):
+        for category in categories:
+            print('%02d. ' % label, str(category).rjust(30), ' - ', images_count[category])
     return buffer
 
 

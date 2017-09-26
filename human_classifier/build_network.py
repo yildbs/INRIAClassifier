@@ -54,6 +54,8 @@ class LeNet:
         self.conv2_dim = 32
         self.fc1_dim = 1000
         self.fc2_dim = 500
+        self.learning_rates = [0.0001, 0.000001]
+        self.decay_steps = 20
 
     def set_train_buffer(self, buffer):
         self._train_buffer = buffer
@@ -116,9 +118,9 @@ class LeNet:
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=ground_truth, logits=logits))
 
         global_step = tf.Variable(0, trainable=False)
-        starter_learning_rate = 0.0001
-        end_learning_rate = 0.000001
-        decay_steps = 20
+        starter_learning_rate = self.learning_rates[0]
+        end_learning_rate = self.learning_rates[0]
+        decay_steps = self.decay_steps
         learning_rate = tf.train.polynomial_decay(starter_learning_rate, global_step,
                                                   decay_steps, end_learning_rate,
                                                   power=0.5)
