@@ -54,8 +54,17 @@ class LeNet:
         self.conv2_dim = 32
         self.fc1_dim = 1000
         self.fc2_dim = 500
-        self.learning_rates = [0.0001, 0.000001]
         self.decay_steps = 20
+
+        self.keep_prob = tf.placeholder(tf.float32)
+
+        self.standards = [0.9, 0.95, 0.98, 1.0]
+        self.learning_rates = [0.0001, 0.0001, 0.00005, 0.00002]
+
+    def get_learning_rate(self, accuracy):
+        for standard, learning_rate in zip(self.standards, self.learning_rates):
+            if accuracy <= standard:
+                return learning_rate
 
     def set_train_buffer(self, buffer):
         self._train_buffer = buffer
@@ -81,7 +90,7 @@ class LeNet:
             batch_x, batch_y, paths = buffer.next_batch(batch_size)
 
             predictions, answers = self.sess.run([tf.argmax(logits, 1), tf.argmax(ground_truth, 1)],
-                                       feed_dict={input: batch_x, ground_truth: batch_y})
+                                       feed_dict={input: batch_x, ground_truth: batch_y, self.keep_prob:1.0})
             for path, prediction, answer in zip(paths, predictions, answers):
                 correct = prediction == answer
                 evaluator.add(correct, path)
@@ -116,21 +125,17 @@ class LeNet:
         logits = self._logits
 
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=ground_truth, logits=logits))
+        learning_rate = tf.placeholder(tf.float32)
 
-        global_step = tf.Variable(0, trainable=False)
-        starter_learning_rate = self.learning_rates[0]
-        end_learning_rate = self.learning_rates[1]
-        decay_steps = self.decay_steps
-        learning_rate = tf.train.polynomial_decay(starter_learning_rate, global_step,
-                                                  decay_steps, end_learning_rate,
-                                                  power=0.5)
-        train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+        train_step = tf.train.AdamOptimizer(learning_rate).minimize(cost)
         correct_prediction = tf.equal(tf.argmax(ground_truth, 1), tf.argmax(logits, 1))
         # accuracy_step = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
         saver = tf.train.Saver()
 
         self.sess.run(tf.global_variables_initializer())
+
+        next_learning_rate = self.learning_rates[0]
 
         for epoch in range(99999):
             batch_size = 100
@@ -139,19 +144,25 @@ class LeNet:
             self._train_buffer.reset()
             for idx in range(batch_count):
                 batch_x, batch_y, _ = self._train_buffer.next_batch(batch_size)
-                self.sess.run(train_step, feed_dict={input:batch_x, ground_truth:batch_y})
+                self.sess.run(train_step,
+                              feed_dict={input: batch_x, ground_truth: batch_y, learning_rate: next_learning_rate,
+                                         self.keep_prob: 0.9})
             self._train_buffer.reset()
 
             evaluator = Evaluator(self._train_buffer.get_category_bundle())
             for idx in range(batch_count):
                 batch_x, batch_y, paths = self._train_buffer.next_batch(batch_size)
-                prediction = self.sess.run(correct_prediction, feed_dict={input: batch_x, ground_truth: batch_y})
+                prediction = self.sess.run(correct_prediction,
+                                           feed_dict={input: batch_x, ground_truth: batch_y, self.keep_prob: 1.0})
                 for path, prediction in zip(paths, prediction):
                     evaluator.add(prediction, path)
 
             print('\n\nEpoch %02d' % epoch)
             all_score, scores = evaluator.print_scores()
             print('- Graph saved at %s' % saver.save(self.sess, "./model.ckpt"))
+
+            next_learning_rate = self.get_learning_rate(all_score)
+            print('next_learning_rate : ', next_learning_rate)
 
             if all_score >= 0.99:
                 print('Training Complete!')
@@ -164,47 +175,104 @@ class LeNet:
 
         # Convolution layer 1
         filter_size = self.conv1_filter_size
-        conv1_w = tf.get_variable('conv1_W', shape=[filter_size, filter_size, shape[2], self.conv1_dim],
-                                  initializer=initializer)
-        conv1_b = tf.get_variable('conv1_b', shape=[self.conv1_dim], initializer=initializer)
+        conv1_w = tf.Variable(initializer([filter_size, filter_size, shape[2], self.conv1_dim]), name='conv1_w')
+        conv1_b = tf.Variable(initializer([self.conv1_dim]), name='conv1_b')
         conv1_conv = tf.nn.conv2d(input_image, conv1_w, strides=[1, 1, 1, 1], padding='VALID')+conv1_b
-        conv1_activation = tf.nn.relu(conv1_conv)
+        conv1_relu = tf.nn.relu(conv1_conv)
 
         # Pooling layer 1
-        pool1_max_pool = tf.nn.max_pool(conv1_activation, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+        pool1_max_pool = tf.nn.max_pool(conv1_relu, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
 
         # Convolution layer 2
         filter_size = self.conv2_filter_size
-        conv2_w = tf.get_variable('conv2_W', shape=[filter_size, filter_size, self.conv1_dim, self.conv2_dim],
-                                  initializer=initializer)
-        conv2_b = tf.get_variable('conv2_b', shape=[self.conv2_dim], initializer=initializer)
+        conv2_w = tf.Variable(initializer([filter_size, filter_size, self.conv1_dim, self.conv2_dim]), name='conv2_w')
+        conv2_b = tf.Variable(initializer([self.conv2_dim]), name='conv2_b')
         conv2_conv = tf.nn.conv2d(pool1_max_pool, conv2_w, strides=[1, 1, 1, 1], padding='VALID') + conv2_b
-        conv2_activation = tf.nn.relu(conv2_conv)
+        conv2_relu = tf.nn.relu(conv2_conv)
 
         # Pooling layer 2
-        pool2_max_pool = tf.nn.max_pool(conv2_activation, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+        pool2_max_pool = tf.nn.max_pool(conv2_relu, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
         pool2_max_pool_dim = int(pool2_max_pool.shape[1] * pool2_max_pool.shape[2] * pool2_max_pool.shape[3])
         flat_pool2_max_pool = tf.reshape(pool2_max_pool, [-1, pool2_max_pool_dim])
 
         # Fully connected layer 1
-        fc1_w = tf.get_variable('fc1_w', shape=[pool2_max_pool_dim, self.fc1_dim],
-                                initializer=tf.contrib.layers.xavier_initializer())
-        fc1_b = tf.get_variable('fc1_b', shape=[self.fc1_dim], initializer=initializer)
+        fc1_w = tf.Variable(initializer([pool2_max_pool_dim, self.fc1_dim]), name='fc1_w')
+        fc1_b = tf.Variable(initializer([self.fc1_dim]), name='fc1_b')
         fc1_fc = tf.matmul(flat_pool2_max_pool, fc1_w) + fc1_b
-        fc1_fc_dim = int(fc1_fc.shape[1])
 
         # Fully connected layer 2
-        fc2_w = tf.get_variable('fc2_w', shape=[self.fc1_dim, self.fc2_dim],
-                                initializer=tf.contrib.layers.xavier_initializer())
-        fc2_b = tf.get_variable('fc2_b', shape=[self.fc2_dim], initializer=initializer)
+        fc2_w = tf.Variable(initializer([self.fc1_dim, self.fc2_dim]), name='fc2_w')
+        fc2_b = tf.Variable(initializer([self.fc2_dim]), name='fc2_b')
         fc2_fc = tf.matmul(fc1_fc, fc2_w) + fc2_b
-        fc2_fc_dim = int(fc2_fc.shape[1])
 
         # Fully connected layer 3
-        fc3_w = tf.get_variable('fc3_w', shape=[self.fc2_dim, num_label],
-                                initializer=tf.contrib.layers.xavier_initializer())
-        fc3_b = tf.get_variable('fc3_b', shape=[num_label], initializer=initializer)
+        fc3_w = tf.Variable(initializer([self.fc2_dim, num_label]), name='fc3_w')
+        fc3_b = tf.Variable(initializer([num_label]), name='fc3_b')
+
         fc3_fc = tf.matmul(fc2_fc, fc3_w) + fc3_b
 
         return fc3_fc
 
+    def _build_network2(self, input, shape, num_label):
+        keep_prob = self.keep_prob
+
+        input_image = tf.reshape(input, [-1, shape[0], shape[1], shape[2]])
+
+        initializer = tf.contrib.layers.xavier_initializer()
+
+        # Convolution layer 1
+        filter_size = self.conv1_filter_size
+        conv1_w = tf.Variable(initializer([filter_size, filter_size, shape[2], self.conv1_dim]), name='conv1_w')
+        conv1_b = tf.Variable(initializer([self.conv1_dim]), name='conv1_b')
+        conv1_conv = tf.nn.conv2d(input_image, conv1_w, strides=[1, 1, 1, 1], padding='VALID')+conv1_b
+
+        # Pooling layer 1
+        pool1_max_pool = tf.nn.max_pool(conv1_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+
+        # LRN ayer 1
+        lrn1 = tf.nn.lrn(pool1_max_pool, 4, bias=1.0, alpha=0.0001 / 9.0, beta=0.75, name='lrn1')
+
+        # Convolution layer 2
+        filter_size = self.conv2_filter_size
+        conv2_w = tf.Variable(initializer([filter_size, filter_size, self.conv1_dim, self.conv2_dim]), name='conv2_w')
+        conv2_b = tf.Variable(initializer([self.conv2_dim]), name='conv2_b')
+        conv2_conv = tf.nn.conv2d(lrn1, conv2_w, strides=[1, 1, 1, 1], padding='VALID') + conv2_b
+
+        # Pooling layer 2
+        pool2_max_pool = tf.nn.max_pool(conv2_conv, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+
+        # LRN ayer 1
+        lrn2 = tf.nn.lrn(pool2_max_pool, 4, bias=1.0, alpha=0.0001 / 9.0, beta=0.75, name='lrn2')
+
+        # Reshape
+        lrn2_dim = int(lrn2.shape[1] * lrn2.shape[2] * lrn2.shape[3])
+        flat_lrn2 = tf.reshape(lrn2, [-1, lrn2_dim])
+
+        # Fully connected layer 1
+        fc1_w = tf.Variable(initializer([lrn2_dim, self.fc1_dim]), name='fc1_w')
+        fc1_b = tf.Variable(initializer([self.fc1_dim]), name='fc1_b')
+        fc1_fc = tf.matmul(flat_lrn2, fc1_w) + fc1_b
+
+        # ReLU
+        conv1_relu = tf.nn.relu(fc1_fc)
+
+        # Dropout
+        dropout_conv1_relu = tf.nn.dropout(conv1_relu, keep_prob)
+
+        # Fully connected layer 2
+        fc2_w = tf.Variable(initializer([self.fc1_dim, self.fc2_dim]), name='fc2_w')
+        fc2_b = tf.Variable(initializer([self.fc2_dim]), name='fc2_b')
+        fc2_fc = tf.matmul(dropout_conv1_relu, fc2_w) + fc2_b
+
+        # ReLU
+        conv2_relu = tf.nn.relu(fc2_fc)
+
+        # Dropout
+        dropout_conv2_relu = tf.nn.dropout(conv2_relu, keep_prob)
+
+        # Fully connected layer 3
+        fc3_w = tf.Variable(initializer([self.fc2_dim, num_label]), name='fc3_w')
+        fc3_b = tf.Variable(initializer([num_label]), name='fc3_b')
+        fc3_fc = tf.matmul(dropout_conv2_relu, fc3_w) + fc3_b
+
+        return fc3_fc

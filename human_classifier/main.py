@@ -129,14 +129,25 @@ def make_train_buffer(path, refine=False):
     human = []
     human.append('full_body_bot')
     human.append('full_body_center')
-    # human.append('full_body_left')
-    # human.append('full_body_left_bot')
-    # human.append('full_body_left_top')
+    human.append('full_body_left')
+    human.append('full_body_left_bot')
+    human.append('full_body_left_top')
     human.append('full_body_right')
     human.append('full_body_right_bot')
     human.append('full_body_right_top')
     human.append('full_body_top')
     human.append('full_body_wide')
+
+    human.append('upper_body_bot')
+    human.append('upper_body_center')
+    human.append('upper_body_left')
+    human.append('upper_body_left_bot')
+    human.append('upper_body_left_top')
+    human.append('upper_body_right')
+    human.append('upper_body_right_bot')
+    human.append('upper_body_right_top')
+    human.append('upper_body_top')
+    human.append('upper_body_wide')
 
     max_num_of_category = {}
     max_num_of_category['background'] = 400 * len(human)
@@ -157,8 +168,8 @@ def make_train_buffer(path, refine=False):
                 filelist = filelist[:max_num_of_category[category]]
             for file in filelist:
                 buffer.add_path_label(file, label)
-                if file.find('right') != -1:
-                    buffer.add_path_label(file, label, ['flipped'])
+                # if file.find('right') != -1:
+                #     buffer.add_path_label(file, label, ['flipped'])
                 images_count[category] += 1
 
     print('Num of images in each classes')
@@ -185,6 +196,17 @@ def make_test_buffer(path, refine=False):
     human.append('full_body_right_top')
     human.append('full_body_top')
     human.append('full_body_wide')
+
+    human.append('upper_body_bot')
+    human.append('upper_body_center')
+    human.append('upper_body_left')
+    human.append('upper_body_left_bot')
+    human.append('upper_body_left_top')
+    human.append('upper_body_right')
+    human.append('upper_body_right_bot')
+    human.append('upper_body_right_top')
+    human.append('upper_body_top')
+    human.append('upper_body_wide')
 
     max_num_of_category = {}
     max_num_of_category['background'] = 180 * len(human)
